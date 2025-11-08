@@ -21,6 +21,7 @@ const InputBar = ({
 }) => {
   const textareaRef = useRef(null);
   const [showManage, setShowManage] = useState(false);
+  const [hoverPinnedIdx, setHoverPinnedIdx] = useState(-1);
   const manageCloseTimer = useRef(null);
 
   const cancelManageClose = () => {
@@ -124,11 +125,17 @@ const InputBar = ({
                     {(pinned.length > 0 ? pinned.filter((n) => models.includes(n)) : models).slice(0, 3).map((name, idx) => (
                       <button
                         key={name}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 cursor-grab"
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg ${hoverPinnedIdx === idx ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                         onClick={() => onSelectModel && onSelectModel(name)}
-                        draggable
-                        onDragStart={(e) => e.dataTransfer.setData('text/model', name)}
-                        onDragOver={(e) => e.preventDefault()}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (hoverPinnedIdx !== idx) setHoverPinnedIdx(idx);
+                        }}
+                        onDragEnter={() => setHoverPinnedIdx(idx)}
+                        onDragLeave={(e) => {
+                          // only clear if truly leaving the item
+                          if (!e.currentTarget.contains(e.relatedTarget)) setHoverPinnedIdx(-1);
+                        }}
                         onDrop={(e) => {
                           const incoming = e.dataTransfer.getData('text/model');
                           if (!incoming || incoming === name) return;
@@ -146,6 +153,7 @@ const InputBar = ({
                             next = base.filter(Boolean).slice(0, 3);
                           }
                           onManagePinned && onManagePinned(next);
+                          setHoverPinnedIdx(-1);
                         }}
                       >
                         <span className="text-base text-gray-800">{name}</span>
