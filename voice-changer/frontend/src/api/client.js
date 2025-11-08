@@ -133,4 +133,32 @@ export const transformPdf = async (file, modelName, outputFormat = 'text') => {
   }
 };
 
+// Character-related functions
+
+/**
+ * Search for famous characters matching a query
+ * @param {string} query - The character name or type to search for
+ * @returns {Promise<{characters: Array, count: number}>}
+ */
+export const searchCharacters = async (query) => {
+  const response = await apiClient.post('/api/search-characters', { query });
+  return response.data;
+};
+
+/**
+ * Train a model from a famous character using LLM's knowledge
+ * @param {string} name - Character name
+ * @param {string} description - Character description
+ * @param {string} source - Source work/franchise
+ * @returns {Promise<{success: boolean, report_id: string, message: string}>}
+ */
+export const trainFromCharacter = async (name, description, source) => {
+  const response = await apiClient.post('/api/train-from-character', {
+    name,
+    description,
+    source,
+  });
+  return response.data;
+};
+
 export default apiClient;

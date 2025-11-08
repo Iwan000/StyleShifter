@@ -41,6 +41,39 @@ class StyleLearner:
 
         return report_id, style_report
 
+    def analyze_character(self, character_name: str, description: str, source: str) -> tuple[str, str]:
+        """
+        Generate a style report for a famous character using LLM's existing knowledge.
+
+        Args:
+            character_name: The name of the character
+            description: Brief description of the character
+            source: The source work/franchise
+
+        Returns:
+            tuple: (report_id, style_report)
+        """
+        # Create the character analysis prompt
+        prompt = self._create_character_prompt(character_name, description, source)
+
+        # Call OpenAI API using Responses API (for GPT-5)
+        response = self.client.responses.create(
+            model=self.model_name,
+            instructions="You are an expert in analyzing writing styles and character voices.",
+            input=prompt
+        )
+
+        # Extract the style report
+        style_report = response.output_text
+
+        # Generate a temporary report ID
+        report_id = f"temp_{int(time.time())}"
+
+        # Save temporary report
+        self._save_temp_report(report_id, style_report)
+
+        return report_id, style_report
+
     def _create_learner_prompt(self, corpus: str) -> str:
         """Create the prompt for style analysis"""
         return f"""You are an expert in analyzing writing styles and character voices. Analyze the following text corpus and create a comprehensive style guide.
@@ -61,6 +94,27 @@ CORPUS:
 {corpus}
 
 Generate a detailed style report that can be used to accurately mimic this writing style."""
+
+    def _create_character_prompt(self, character_name: str, description: str, source: str) -> str:
+        """Create the prompt for character-based style analysis"""
+        return f"""You are an expert in analyzing writing styles and character voices. Based on your knowledge of the character, create a comprehensive style guide for mimicking their speaking/writing style.
+
+CHARACTER INFORMATION:
+Name: {character_name}
+Description: {description}
+Source: {source}
+
+Using your knowledge of this character from {source}, document the following aspects:
+1. Vocabulary patterns and unique phrases
+2. Sentence structure and rhythm
+3. Tone and emotional patterns
+4. Speaking mannerisms and quirks
+5. Common topics and themes
+6. Catchphrases or recurring elements
+7. Punctuation and formatting patterns
+8. Energy level and enthusiasm
+
+Be specific and provide examples based on how this character typically speaks or writes. Generate a detailed style report that can be used to accurately mimic this character's style."""
 
     def _save_temp_report(self, report_id: str, style_report: str):
         """Save a temporary style report"""

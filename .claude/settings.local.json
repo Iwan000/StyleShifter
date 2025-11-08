@@ -13,7 +13,9 @@
       "Bash(npx tailwindcss:*)",
       "Bash(npm run dev:*)",
       "Bash(npm uninstall:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)"
     ],
     "deny": [],
     "ask": []

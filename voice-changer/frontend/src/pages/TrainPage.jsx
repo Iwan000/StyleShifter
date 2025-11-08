@@ -1,12 +1,23 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { trainModel, saveModel, trainModelFromPdf, extractPdf } from '../api/client';
+import { trainModel, saveModel, trainModelFromPdf, extractPdf, searchCharacters, trainFromCharacter } from '../api/client';
 import ModelNameDialog from '../components/ModelNameDialog';
 import FileUploadZone from '../components/FileUploadZone';
 
+// Category icons mapping
+const CATEGORY_ICONS = {
+  'tv': '📺',
+  'movie': '🎬',
+  'literature': '📚',
+  'historical': '👤',
+  'game': '🎮',
+  'anime': '🎌',
+  'cartoon': '🎨',
+};
+
 const TrainPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('text'); // 'text' or 'pdf'
+  const [activeTab, setActiveTab] = useState('text'); // 'text', 'pdf', or 'character'
   const [corpus, setCorpus] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
   const [extractedText, setExtractedText] = useState('');
@@ -16,6 +27,13 @@ const TrainPage = () => {
   const [showDialog, setShowDialog] = useState(false);
   const [reportId, setReportId] = useState(null);
   const [error, setError] = useState(null);
+
+  // Character search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [characters, setCharacters] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Calculate stats based on active tab
   const textToAnalyze = activeTab === 'text' ? corpus : extractedText;
@@ -43,6 +61,42 @@ const TrainPage = () => {
       setPdfFile(null);
     } finally {
       setIsExtracting(false);
+    }
+  };
+
+  // Handle character search
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    setSearchError(null);
+    setHasSearched(true);
+    setCharacters([]);
+
+    try {
+      const result = await searchCharacters(searchQuery);
+      setCharacters(result.characters || []);
+    } catch (err) {
+      setSearchError('Failed to search characters. Please try again.');
+      setCharacters([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle character selection for training
+  const handleCharacterSelect = async (character) => {
+    setError(null);
+    setIsTraining(true);
+
+    try {
+      const result = await trainFromCharacter(character.name, character.description, character.source);
+      setReportId(result.report_id);
+      setShowDialog(true);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to analyze character. Please try again.');
+    } finally {
+      setIsTraining(false);
     }
   };
 
@@ -82,26 +136,25 @@ const TrainPage = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-10 animate-slide-up">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">
+        <div className="text-center mb-6 animate-slide-up">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Train Your Style Model
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Provide text or upload a PDF from your desired style source. The model will learn the writing patterns,
-            tone, and vocabulary to transform your text.
+          <p className="text-base text-gray-600 max-w-2xl mx-auto">
+            Provide text, upload a PDF, or browse famous characters to create your style model
           </p>
         </div>
 
         {/* Main Card */}
-        <div className="card p-8 animate-scale-in">
+        <div className="card p-6 animate-scale-in">
           {/* Tab Switcher */}
           <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
             <button
               onClick={() => setActiveTab('text')}
-              className={`flex-1 py-2.5 px-4 rounded-md font-medium text-sm transition-all ${
+              className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
                 activeTab === 'text'
                   ? 'bg-white text-primary-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -111,13 +164,23 @@ const TrainPage = () => {
             </button>
             <button
               onClick={() => setActiveTab('pdf')}
-              className={`flex-1 py-2.5 px-4 rounded-md font-medium text-sm transition-all ${
+              className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
                 activeTab === 'pdf'
                   ? 'bg-white text-primary-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Upload PDF
+            </button>
+            <button
+              onClick={() => setActiveTab('character')}
+              className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+                activeTab === 'character'
+                  ? 'bg-white text-primary-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Browse Characters
             </button>
           </div>
 
@@ -132,7 +195,7 @@ const TrainPage = () => {
                 value={corpus}
                 onChange={(e) => setCorpus(e.target.value)}
                 placeholder="Paste dialogue from SpongeBob, Shakespeare quotes, or any text with a distinctive style..."
-                className="textarea-field h-64 text-base"
+                className="textarea-field h-48 text-base"
                 disabled={isTraining}
               />
 
@@ -152,7 +215,7 @@ const TrainPage = () => {
                 )}
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'pdf' ? (
             /* PDF Upload Section */
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -206,12 +269,102 @@ const TrainPage = () => {
                       <span className="text-gray-600">{wordCount} words</span>
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-48 overflow-y-auto">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-32 overflow-y-auto">
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">
                       {extractedText.substring(0, 500)}
                       {extractedText.length > 500 && '...'}
                     </p>
                   </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Character Search Section */
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                Search for a Character
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="e.g., SpongeBob, Yoda, Shakespeare..."
+                  className="input-field flex-1"
+                  disabled={isSearching || isTraining}
+                />
+                <button
+                  onClick={handleSearch}
+                  disabled={!searchQuery.trim() || isSearching || isTraining}
+                  className="btn-primary px-6"
+                >
+                  {isSearching ? (
+                    <svg
+                      className="animate-spin h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                  ) : (
+                    'Search'
+                  )}
+                </button>
+              </div>
+
+              {/* Search Results */}
+              {hasSearched && !isSearching && (
+                <div className="mt-4">
+                  {characters.length > 0 ? (
+                    <div className="space-y-3">
+                      {characters.map((char, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleCharacterSelect(char)}
+                          disabled={isTraining}
+                          className="w-full p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-primary-400 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl flex-shrink-0">
+                              {CATEGORY_ICONS[char.category] || '🎭'}
+                            </span>
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-gray-900">{char.name}</h3>
+                              <p className="text-sm text-gray-600 mt-1">{char.description}</p>
+                              <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
+                                {char.source}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center bg-gray-50 border border-gray-200 rounded-lg">
+                      <p className="text-gray-600">
+                        Sorry, I don't have this character in my database. Please use 'Paste Text' or 'Upload PDF'.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {searchError && (
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">{searchError}</p>
                 </div>
               )}
             </div>
@@ -229,63 +382,41 @@ const TrainPage = () => {
             </div>
           )}
 
-          {/* Action Button */}
-          <button
-            onClick={handleTrain}
-            disabled={!isValid || isTraining}
-            className="btn-primary w-full text-lg py-4"
-          >
-            {isTraining ? (
-              <span className="flex items-center justify-center">
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-6 w-6 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Analyzing style patterns...
-              </span>
-            ) : (
-              'Analyze Style'
-            )}
-          </button>
-
-          {/* Tips */}
-          <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-              Tips for better results
-            </h3>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li className="flex items-start">
-                <span className="text-primary-500 mr-2">•</span>
-                <span>The more text you provide, the better the model will learn the style</span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-primary-500 mr-2">•</span>
-                <span>Use text from a consistent source for clearer patterns</span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-primary-500 mr-2">•</span>
-                <span>Include varied examples to capture different aspects of the style</span>
-              </li>
-            </ul>
-          </div>
+          {/* Action Button - Only for text and PDF tabs */}
+          {activeTab !== 'character' && (
+            <button
+              onClick={handleTrain}
+              disabled={!isValid || isTraining}
+              className="btn-primary w-full text-lg py-3"
+            >
+              {isTraining ? (
+                <span className="flex items-center justify-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-6 w-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  Analyzing style patterns...
+                </span>
+              ) : (
+                'Analyze Style'
+              )}
+            </button>
+          )}
         </div>
       </div>
 

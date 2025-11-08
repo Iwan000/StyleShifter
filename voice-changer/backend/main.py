@@ -10,6 +10,7 @@ from config import config
 from services.style_learner import StyleLearner
 from services.style_actor import StyleActor
 from services.pdf_processor import PDFProcessor
+from services.character_searcher import CharacterSearcher
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -31,6 +32,7 @@ app.add_middleware(
 style_learner = StyleLearner()
 style_actor = StyleActor()
 pdf_processor = PDFProcessor(max_file_size_mb=10)
+character_searcher = CharacterSearcher()
 
 # Request/Response Models
 class TrainRequest(BaseModel):
@@ -64,6 +66,24 @@ class TransformResponse(BaseModel):
 class DeleteResponse(BaseModel):
     success: bool
     message: str
+
+class SearchCharactersRequest(BaseModel):
+    query: str
+
+class Character(BaseModel):
+    name: str
+    description: str
+    source: str
+    category: str
+
+class SearchCharactersResponse(BaseModel):
+    characters: List[Character]
+    count: int
+
+class TrainFromCharacterRequest(BaseModel):
+    name: str
+    description: str
+    source: str
 
 # API Endpoints
 
@@ -102,6 +122,59 @@ async def train(request: TrainRequest):
             success=True,
             report_id=report_id,
             message="Style analysis complete"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/search-characters", response_model=SearchCharactersResponse)
+async def search_characters(request: SearchCharactersRequest):
+    """
+    Search for famous characters matching the query using LLM.
+    """
+    try:
+        # Validate query
+        if not request.query or len(request.query.strip()) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Search query cannot be empty"
+            )
+
+        # Search for characters
+        characters = character_searcher.search_characters(request.query.strip())
+
+        return SearchCharactersResponse(
+            characters=[Character(**char) for char in characters],
+            count=len(characters)
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/train-from-character", response_model=TrainResponse)
+async def train_from_character(request: TrainFromCharacterRequest):
+    """
+    Generate a style report for a famous character using LLM's knowledge.
+    """
+    try:
+        # Validate inputs
+        if not request.name or len(request.name.strip()) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Character name cannot be empty"
+            )
+
+        # Generate style report from character
+        report_id, style_report = style_learner.analyze_character(
+            request.name,
+            request.description,
+            request.source
+        )
+
+        return TrainResponse(
+            success=True,
+            report_id=report_id,
+            message=f"Style analysis complete for {request.name}"
         )
 
     except Exception as e:
