@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import ChatHeader from '../components/ChatHeader';
 import MessageArea from '../components/MessageArea';
 import InputBar from '../components/InputBar';
-import { getModels, transformText } from '../api/client';
+import { getModels, transformText, deleteModel as apiDeleteModel } from '../api/client';
 import PinnedModelsManager from '../components/PinnedModelsManager';
 import TransformPreviewOverlay from '../components/TransformPreviewOverlay';
 import StyleShifterModal from '../components/StyleShifterModal';
@@ -109,6 +109,28 @@ const ChatPage = () => {
     setPendingMessage('');
   };
 
+  const handleUpdatePinned = (arr) => {
+    setPinned(arr);
+    localStorage.setItem('pinnedModels', JSON.stringify(arr));
+  };
+
+  const handleDeleteModel = async (name) => {
+    try {
+      await apiDeleteModel(name);
+      setModels((prev) => prev.filter((m) => m.name !== name));
+      // also remove from pinned if present
+      setPinned((prev) => {
+        const next = prev.filter((p) => p !== name);
+        localStorage.setItem('pinnedModels', JSON.stringify(next));
+        return next;
+      });
+      // deselect if deleted
+      if (selectedModel === name) setSelectedModel(null);
+    } catch (e) {
+      // noop
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
       <ChatHeader />
@@ -142,9 +164,10 @@ const ChatPage = () => {
         selectedModel={selectedModel}
         onSelectModel={(name) => { setSelectedModel(name); setShowModelSelector(false); }}
         onSelectOff={() => { setSelectedModel(null); setShowModelSelector(false); }}
-        onManagePinned={() => { setShowPinnedManager(true); setShowModelSelector(false); }}
+        onManagePinned={handleUpdatePinned}
         onOpenStyleShifter={() => { setShowStyleShifter(true); setShowModelSelector(false); }}
         onCloseSelector={() => setShowModelSelector(false)}
+        onDeleteModel={handleDeleteModel}
       />
 
       <PinnedModelsManager

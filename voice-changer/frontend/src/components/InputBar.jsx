@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 
 const InputBar = ({
   inputValue,
@@ -20,6 +20,23 @@ const InputBar = ({
   onCloseSelector,
 }) => {
   const textareaRef = useRef(null);
+  const [showManage, setShowManage] = useState(false);
+  const manageCloseTimer = useRef(null);
+
+  const cancelManageClose = () => {
+    if (manageCloseTimer.current) {
+      clearTimeout(manageCloseTimer.current);
+      manageCloseTimer.current = null;
+    }
+  };
+
+  const scheduleManageClose = (delay = 150) => {
+    cancelManageClose();
+    manageCloseTimer.current = setTimeout(() => {
+      setShowManage(false);
+      manageCloseTimer.current = null;
+    }, delay);
+  };
 
   useEffect(() => {
     if (!textareaRef.current) return;
@@ -58,7 +75,19 @@ const InputBar = ({
               {/* click-away overlay */}
               <div className="fixed inset-0 z-40" onClick={onCloseSelector} />
               <div className="absolute z-50 bottom-full mb-2 left-0 w-72">
-                <div className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-2">
+                <div
+                  className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-2 max-h-[60vh] overflow-auto"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    const name = e.dataTransfer.getData('text/model');
+                    if (!name) return;
+                    // drop on container: add to pinned (if room)
+                    if (!pinned.includes(name)) {
+                      const next = [...pinned, name].slice(0, 3);
+                      onManagePinned && onManagePinned(next);
+                    }
+                  }}
+                >
                   {/* Title */}
                   <div className="flex items-center gap-2 px-2 py-1.5">
                     <div className="w-6 h-6 bg-gradient-to-br from-primary-600 to-primary-400 rounded-md flex items-center justify-center">
@@ -92,8 +121,33 @@ const InputBar = ({
                   <div className="my-2 h-px bg-gray-200" />
                   <div className="px-3 py-1 text-sm font-semibold text-gray-500">Style Models</div>
                   <div className="py-1">
-                    {(pinned.length > 0 ? pinned.filter((n) => models.includes(n)) : models).slice(0, 3).map((name) => (
-                      <button key={name} className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50" onClick={() => onSelectModel && onSelectModel(name)}>
+                    {(pinned.length > 0 ? pinned.filter((n) => models.includes(n)) : models).slice(0, 3).map((name, idx) => (
+                      <button
+                        key={name}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 cursor-grab"
+                        onClick={() => onSelectModel && onSelectModel(name)}
+                        draggable
+                        onDragStart={(e) => e.dataTransfer.setData('text/model', name)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          const incoming = e.dataTransfer.getData('text/model');
+                          if (!incoming || incoming === name) return;
+                          let next = pinned.filter((p) => p !== incoming);
+                          next = next.slice(0, 3);
+                          // ensure length at least idx
+                          next = next.filter(Boolean);
+                          if (next.includes(name)) {
+                            // swap positions
+                            next = next.map((n) => (n === name ? incoming : n));
+                          } else {
+                            // replace this position
+                            const base = pinned.slice();
+                            base[idx] = incoming;
+                            next = base.filter(Boolean).slice(0, 3);
+                          }
+                          onManagePinned && onManagePinned(next);
+                        }}
+                      >
                         <span className="text-base text-gray-800">{name}</span>
                         {selectedModel === name && (
                           <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,12 +159,29 @@ const InputBar = ({
                   </div>
                   <div className="my-2 h-px bg-gray-200" />
                   <div className="px-1 py-1 space-y-1">
-                    <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-50 text-blue-700" onClick={onManagePinned}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 16v-2m8-6h2M2 12H4m13.657-6.343l1.414-1.414M4.929 19.071l1.414-1.414M19.071 19.071l-1.414-1.414M6.343 6.343 4.93 4.93" />
-                      </svg>
-                      <span className="font-medium">Manage Style Models</span>
-                    </button>
+                    <div
+                      className="relative"
+                      onMouseEnter={() => {
+                        cancelManageClose();
+                        setShowManage(true);
+                      }}
+                      onMouseLeave={() => {
+                        scheduleManageClose();
+                      }}
+                    >
+                      <button
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-50 text-blue-700"
+                        onClick={() => {
+                          cancelManageClose();
+                          setShowManage(true);
+                        }}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 16v-2m8-6h2M2 12H4m13.657-6.343l1.414-1.414M4.929 19.071l1.414-1.414M19.071 19.071l-1.414-1.414M6.343 6.343 4.93 4.93" />
+                        </svg>
+                        <span className="font-medium">Manage Style Models</span>
+                      </button>
+                    </div>
                     <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-50 text-blue-700" onClick={onOpenStyleShifter}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -118,8 +189,74 @@ const InputBar = ({
                       <span className="font-medium">Open StyleShifter</span>
                     </button>
                   </div>
+            </div>
+          </div>
+              {/* External manage panel aligned and sized like main popover */}
+              {showManage && (
+                <div
+                  className="absolute z-50 bottom-full mb-2 left-0 w-72"
+                  style={{ left: '19rem' }}
+                  onMouseEnter={() => {
+                    cancelManageClose();
+                    setShowManage(true);
+                  }}
+                  onMouseLeave={() => {
+                    scheduleManageClose();
+                  }}
+                >
+                  <div
+                    className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-3 max-h-[60vh] overflow-auto"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      const name = e.dataTransfer.getData('text/model');
+                      if (!name) return;
+                      if (pinned.includes(name)) {
+                        const next = pinned.filter((p) => p !== name);
+                        onManagePinned && onManagePinned(next);
+                      }
+                    }}
+                  >
+                    <div className="text-sm font-semibold text-gray-700 mb-2">Manage Style Models</div>
+                    <div className="text-xs text-gray-500 mb-1">All Models</div>
+                    <div className="space-y-1">
+                      {models.map((name) => (
+                        <div
+                          key={name}
+                          className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 cursor-grab"
+                          draggable
+                          onDragStart={(e) => e.dataTransfer.setData('text/model', name)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={pinned.includes(name)}
+                              onChange={(e) => {
+                                let next = pinned.slice();
+                                if (e.target.checked) {
+                                  if (!next.includes(name)) next = [...next, name].slice(0, 3);
+                                } else {
+                                  next = next.filter((p) => p !== name);
+                                }
+                                onManagePinned && onManagePinned(next);
+                              }}
+                            />
+                            <span className="text-sm text-gray-800">{name}</span>
+                          </div>
+                          <button
+                            className="p-1.5 rounded hover:bg-red-50 text-red-600"
+                            onClick={() => onDeleteModel && onDeleteModel(name)}
+                            title="Delete model"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>
