@@ -381,73 +381,92 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
   };
 
   const renderTestTab = () => (
-    <div className="grid md:grid-cols-2 gap-4">
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Select Model</label>
-          <select className="input-field" value={testModel} onChange={(e) => setTestModel(e.target.value)}>
-            {models.map((m) => (
-              <option key={m.name} value={m.name}>{m.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex gap-2 p-1 bg-gray-100 rounded-lg inline-flex">
-          <button onClick={() => setTestActive('text')} className={`px-4 py-2 rounded-md text-sm font-medium ${testActive === 'text' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-            Text
-          </button>
-          <button onClick={() => setTestActive('pdf')} className={`px-4 py-2 rounded-md text-sm font-medium ${testActive === 'pdf' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-            PDF
-          </button>
-        </div>
-        {testActive === 'text' ? (
-          <textarea className="textarea-field h-40" placeholder="Enter text to transform…" value={testInput} onChange={(e) => setTestInput(e.target.value)} />
-        ) : (
+    <div className="space-y-4">
+      {/* Two column layout */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Left column - input controls */}
+        <div className="space-y-4">
+          {/* Model selector */}
           <div>
-            <FileUploadZone onFileSelect={setTestPdfFile} accept=".pdf" maxSizeMB={10} />
-            {testPdfFile && (
-              <div className="mt-3">
-                <div className="text-sm font-semibold text-gray-700 mb-2">Output Format</div>
-                <div className="flex gap-2 p-1 bg-gray-100 rounded-lg inline-flex">
-                  <button onClick={() => setTestOutputFormat('text')} className={`px-4 py-2 rounded-md text-sm font-medium ${testOutputFormat === 'text' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-                    Text
-                  </button>
-                  <button onClick={() => setTestOutputFormat('pdf')} className={`px-4 py-2 rounded-md text-sm font-medium ${testOutputFormat === 'pdf' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-                    PDF
-                  </button>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Select Model</label>
+            <select className="input-field" value={testModel} onChange={(e) => setTestModel(e.target.value)}>
+              {models.map((m) => (
+                <option key={m.name} value={m.name}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Text/PDF tabs */}
+          <div className="flex gap-2 p-1 bg-gray-100 rounded-lg inline-flex">
+            <button onClick={() => setTestActive('text')} className={`px-4 py-2 rounded-md text-sm font-medium ${testActive === 'text' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+              Text
+            </button>
+            <button onClick={() => setTestActive('pdf')} className={`px-4 py-2 rounded-md text-sm font-medium ${testActive === 'pdf' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+              PDF
+            </button>
+          </div>
+
+          {/* Input area */}
+          {testActive === 'text' ? (
+            <textarea className="textarea-field h-40" placeholder="Enter text to transform…" value={testInput} onChange={(e) => setTestInput(e.target.value)} />
+          ) : (
+            <div>
+              <FileUploadZone onFileSelect={setTestPdfFile} accept=".pdf" maxSizeMB={10} />
+              {testPdfFile && (
+                <div className="mt-3">
+                  <div className="text-sm font-semibold text-gray-700 mb-2">Output Format</div>
+                  <div className="flex gap-2 p-1 bg-gray-100 rounded-lg inline-flex">
+                    <button onClick={() => setTestOutputFormat('text')} className={`px-4 py-2 rounded-md text-sm font-medium ${testOutputFormat === 'text' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                      Text
+                    </button>
+                    <button onClick={() => setTestOutputFormat('pdf')} className={`px-4 py-2 rounded-md text-sm font-medium ${testOutputFormat === 'pdf' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                      PDF
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right column - output box */}
+        <div className="flex flex-col">
+          {/* Output label - aligned with "Select Model" */}
+          <div className="text-sm font-semibold text-gray-700 mb-2">Output</div>
+
+          {/* Output box - stretches to match left column height */}
+          <div className="flex-1 px-4 py-3 mb-[6px] bg-gray-50 border-2 border-gray-200 rounded-lg overflow-y-auto">
+            {testOutput ? (
+              <p className="text-gray-900 whitespace-pre-wrap">{testOutput}</p>
+            ) : (
+              <p className="text-gray-400 italic">Your transformed output will appear here…</p>
             )}
           </div>
-        )}
+
+          {testOutput && (
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(testOutput);
+                } catch {}
+              }}
+              className="btn-secondary mt-4"
+            >
+              Copy to Clipboard
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Transform button - centered at bottom */}
+      <div className="flex justify-center">
         <button
           onClick={handleTestTransform}
-          className="btn-primary"
+          className="btn-primary px-12"
           disabled={testLoading || !testModel || (testActive === 'text' ? !testInput.trim() : !testPdfFile)}
         >
           {testLoading ? 'Transforming…' : 'Transform'}
         </button>
-      </div>
-      <div className="space-y-3">
-        <div className="text-sm font-semibold text-gray-700">Output</div>
-        <div className="h-64 px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-lg overflow-y-auto">
-          {testOutput ? (
-            <p className="text-gray-900 whitespace-pre-wrap">{testOutput}</p>
-          ) : (
-            <p className="text-gray-400 italic">Your transformed output will appear here…</p>
-          )}
-        </div>
-        {testOutput && (
-          <button
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(testOutput);
-              } catch {}
-            }}
-            className="btn-secondary"
-          >
-            Copy to Clipboard
-          </button>
-        )}
       </div>
     </div>
   );
@@ -457,7 +476,7 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
   return (
     <div className="fixed inset-0 z-50">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="flex min-h-full items-start justify-center p-4 pt-32">
         <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl">
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
             <h2 className="text-xl font-bold text-gray-900">StyleShifter</h2>
@@ -474,7 +493,7 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
                 New Model
               </button>
               <button onClick={() => setActiveTab('test')} className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === 'test' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-                Transform Test
+                Transform
               </button>
             </div>
           </div>
