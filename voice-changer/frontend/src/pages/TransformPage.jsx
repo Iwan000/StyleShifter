@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { getModels, transformText, deleteModel } from '../api/client';
+import { getModels, transformText, deleteModel, transformPdf } from '../api/client';
+import FileUploadZone from '../components/FileUploadZone';
 
 const TransformPage = () => {
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [activeTab, setActiveTab] = useState('text'); // 'text' or 'pdf'
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
+  const [outputFormat, setOutputFormat] = useState('text'); // 'text' or 'pdf'
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -31,18 +35,47 @@ const TransformPage = () => {
     }
   };
 
+  const handlePdfFileSelect = (file) => {
+    setPdfFile(file);
+    setOutputText('');
+    setError(null);
+  };
+
   const handleTransform = async () => {
-    if (!inputText.trim() || !selectedModel) return;
+    if (!selectedModel) return;
+    if (activeTab === 'text' && !inputText.trim()) return;
+    if (activeTab === 'pdf' && !pdfFile) return;
 
     setError(null);
     setIsLoading(true);
     setOutputText('');
 
     try {
-      const result = await transformText(selectedModel, inputText);
-      setOutputText(result.transformed_text);
+      if (activeTab === 'text') {
+        const result = await transformText(selectedModel, inputText);
+        setOutputText(result.transformed_text);
+      } else {
+        // PDF mode
+        if (outputFormat === 'pdf') {
+          // Download PDF
+          const pdfBlob = await transformPdf(pdfFile, selectedModel, 'pdf');
+          const url = window.URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `transformed_${pdfFile.name}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          setOutputText('PDF downloaded successfully!');
+        } else {
+          // Show as text
+          const result = await transformPdf(pdfFile, selectedModel, 'text');
+          setOutputText(result.transformed_text);
+        }
+      }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to transform text. Please try again.');
+      setError(err.response?.data?.detail || 'Failed to transform. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -70,6 +103,12 @@ const TransformPage = () => {
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+
+  const isTransformDisabled = () => {
+    if (!selectedModel || isLoading) return true;
+    if (activeTab === 'text') return !inputText.trim();
+    return !pdfFile;
   };
 
   if (isLoadingModels) {
@@ -113,7 +152,7 @@ const TransformPage = () => {
             Transform Your Text
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Select a trained model and watch your text transform into a different style
+            Select a trained model and transform text or PDF files into a different style
           </p>
         </div>
 
@@ -165,20 +204,88 @@ const TransformPage = () => {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Input Column */}
           <div className="card p-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Text</h2>
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Enter the text you want to transform..."
-              className="textarea-field h-64 mb-4"
-              disabled={isLoading}
-            />
-            <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-              <span>{inputText.length} characters</span>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Input</h2>
+
+            {/* Tab Switcher */}
+            <div className="flex gap-2 mb-4 p-1 bg-gray-100 rounded-lg">
+              <button
+                onClick={() => setActiveTab('text')}
+                className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+                  activeTab === 'text'
+                    ? 'bg-white text-primary-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Text
+              </button>
+              <button
+                onClick={() => setActiveTab('pdf')}
+                className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+                  activeTab === 'pdf'
+                    ? 'bg-white text-primary-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                PDF
+              </button>
             </div>
+
+            {activeTab === 'text' ? (
+              <>
+                <textarea
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Enter the text you want to transform..."
+                  className="textarea-field h-48 mb-4"
+                  disabled={isLoading}
+                />
+                <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                  <span>{inputText.length} characters</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <FileUploadZone
+                  onFileSelect={handlePdfFileSelect}
+                  accept=".pdf"
+                  maxSizeMB={10}
+                  disabled={isLoading}
+                />
+                {pdfFile && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Output Format
+                    </label>
+                    <div className="flex gap-2 p-1 bg-gray-100 rounded-lg mb-4">
+                      <button
+                        onClick={() => setOutputFormat('text')}
+                        className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+                          outputFormat === 'text'
+                            ? 'bg-white text-primary-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Show as Text
+                      </button>
+                      <button
+                        onClick={() => setOutputFormat('pdf')}
+                        className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+                          outputFormat === 'pdf'
+                            ? 'bg-white text-primary-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Download PDF
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
             <button
               onClick={handleTransform}
-              disabled={!inputText.trim() || isLoading}
+              disabled={isTransformDisabled()}
               className="btn-primary w-full"
             >
               {isLoading ? (
@@ -218,8 +325,8 @@ const TransformPage = () => {
           {/* Output Column */}
           <div className="card p-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Transformed Text</h2>
-              {outputText && (
+              <h2 className="text-lg font-semibold text-gray-900">Transformed Output</h2>
+              {outputText && activeTab === 'text' && (
                 <button
                   onClick={handleCopy}
                   className="px-3 py-1.5 text-sm font-medium text-primary-700 hover:text-primary-800 hover:bg-primary-50 rounded-lg transition-all duration-200"
@@ -246,7 +353,7 @@ const TransformPage = () => {
               {outputText ? (
                 <p className="text-gray-900 whitespace-pre-wrap">{outputText}</p>
               ) : (
-                <p className="text-gray-400 italic">Your transformed text will appear here...</p>
+                <p className="text-gray-400 italic">Your transformed output will appear here...</p>
               )}
             </div>
           </div>
