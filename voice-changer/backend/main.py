@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import time
 from datetime import datetime
+import os
 
 from config import config
 from services.style_learner import StyleLearner
@@ -84,6 +85,23 @@ class TrainFromCharacterRequest(BaseModel):
     name: str
     description: str
     source: str
+
+class TrainingExamplesRequest(BaseModel):
+    report_id: str
+    prompts: Optional[List[str]] = None
+
+class TrainingExamplesResponse(BaseModel):
+    examples: List[str]
+
+class CharacterPreviewRequest(BaseModel):
+    name: str
+    description: str
+    source: str
+    prompts: Optional[List[str]] = None
+
+class CharacterPreviewResponse(BaseModel):
+    report_id: str
+    examples: List[str]
 
 # API Endpoints
 
@@ -235,6 +253,84 @@ async def list_models():
 
         return formatted_models
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Default example prompts used for previews
+DEFAULT_PREVIEW_PROMPTS = [
+    "Say hello to a friend and ask how they are.",
+    "Politely ask for directions to the nearest train station.",
+    "Briefly describe today's weather in one sentence.",
+]
+
+@app.post("/api/training-examples", response_model=TrainingExamplesResponse)
+async def training_examples(request: TrainingExamplesRequest):
+    """
+    Generate example transformations using a temporary (unsaved) style report.
+
+    Requires a report_id produced by /api/train or /api/train-pdf.
+    """
+    try:
+        if not request.report_id or not request.report_id.strip():
+            raise HTTPException(status_code=400, detail="report_id is required")
+
+        # Load temp style report from models directory
+        temp_path = os.path.join(config.MODELS_DIR, f"{request.report_id}.md")
+        if not os.path.exists(temp_path):
+            raise HTTPException(status_code=404, detail=f"Temporary report {request.report_id} not found")
+
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            style_report = f.read().strip()
+
+        # Handle potential metadata header (safety, though temp files are plain)
+        if style_report.startswith("---"):
+            parts = style_report.split("---", 2)
+            if len(parts) >= 3:
+                style_report = parts[2].strip()
+
+        prompts = request.prompts if request.prompts and len(request.prompts) > 0 else DEFAULT_PREVIEW_PROMPTS
+
+        examples: List[str] = []
+        for prompt in prompts[:3]:  # ensure max 3
+            transformed = style_actor.transform_with_style_report(style_report, prompt)
+            examples.append(transformed)
+
+        return TrainingExamplesResponse(examples=examples)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/character-preview", response_model=CharacterPreviewResponse)
+async def character_preview(request: CharacterPreviewRequest):
+    """
+    Analyze a character to create a temporary style report and return 3 example
+    transformations for user confirmation before saving.
+    """
+    try:
+        # Basic validation
+        if not request.name or not request.name.strip():
+            raise HTTPException(status_code=400, detail="Character name cannot be empty")
+
+        # Analyze character (saves a temporary report and returns content)
+        report_id, style_report = style_learner.analyze_character(
+            request.name,
+            request.description,
+            request.source
+        )
+
+        prompts = request.prompts if request.prompts and len(request.prompts) > 0 else DEFAULT_PREVIEW_PROMPTS
+
+        examples: List[str] = []
+        for prompt in prompts[:3]:
+            transformed = style_actor.transform_with_style_report(style_report, prompt)
+            examples.append(transformed)
+
+        return CharacterPreviewResponse(report_id=report_id, examples=examples)
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

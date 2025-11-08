@@ -27,7 +27,7 @@ const Navbar = () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-accent-500 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary-600 to-primary-400 rounded-lg flex items-center justify-center">
               <svg
                 className="w-6 h-6 text-white"
                 fill="none"
@@ -43,7 +43,7 @@ const Navbar = () => {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
                 Text Voice Changer
               </h1>
             </div>
@@ -51,6 +51,16 @@ const Navbar = () => {
 
           {/* Navigation Links */}
           <div className="flex items-center space-x-1">
+            <Link
+              to="/chat"
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                isActive('/chat')
+                  ? 'bg-primary-50 text-primary-700'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              Chat
+            </Link>
             <Link
               to="/train"
               className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${

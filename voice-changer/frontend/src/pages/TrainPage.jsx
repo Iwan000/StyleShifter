@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { trainModel, saveModel, trainModelFromPdf, extractPdf, searchCharacters, trainFromCharacter } from '../api/client';
-import ModelNameDialog from '../components/ModelNameDialog';
+import { trainModel, saveModel, trainModelFromPdf, extractPdf, searchCharacters, getTrainingExamples, getCharacterPreview } from '../api/client';
 import FileUploadZone from '../components/FileUploadZone';
+import TrainingPreview from '../components/TrainingPreview';
 
 // Category icons mapping
 const CATEGORY_ICONS = {
@@ -24,7 +24,6 @@ const TrainPage = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showDialog, setShowDialog] = useState(false);
   const [reportId, setReportId] = useState(null);
   const [error, setError] = useState(null);
 
@@ -34,6 +33,10 @@ const TrainPage = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [trainingCharacter, setTrainingCharacter] = useState(null);
+  const [previewExamples, setPreviewExamples] = useState([]);
+  const [previewDefaultName, setPreviewDefaultName] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Calculate stats based on active tab
   const textToAnalyze = activeTab === 'text' ? corpus : extractedText;
@@ -88,15 +91,20 @@ const TrainPage = () => {
   const handleCharacterSelect = async (character) => {
     setError(null);
     setIsTraining(true);
+    setTrainingCharacter(character.name);
 
     try {
-      const result = await trainFromCharacter(character.name, character.description, character.source);
-      setReportId(result.report_id);
-      setShowDialog(true);
+      // Preview-first flow: analyze + examples before saving
+      const preview = await getCharacterPreview(character.name, character.description, character.source);
+      setReportId(preview.report_id);
+      setPreviewExamples(preview.examples || []);
+      setPreviewDefaultName(character.name || '');
+      setIsPreviewOpen(true);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to analyze character. Please try again.');
     } finally {
       setIsTraining(false);
+      setTrainingCharacter(null);
     }
   };
 
@@ -113,12 +121,18 @@ const TrainPage = () => {
       } else {
         result = await trainModelFromPdf(pdfFile);
       }
-      setReportId(result.report_id);
-      setShowDialog(true);
+      const rid = result.report_id;
+      setReportId(rid);
+      // Fetch training examples for preview
+      const preview = await getTrainingExamples(rid);
+      setPreviewExamples(preview.examples || []);
+      setPreviewDefaultName('');
+      setIsPreviewOpen(true);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to analyze corpus. Please try again.');
     } finally {
       setIsTraining(false);
+      
     }
   };
 
@@ -126,7 +140,7 @@ const TrainPage = () => {
     setIsSaving(true);
     try {
       await saveModel(reportId, modelName);
-      setShowDialog(false);
+      setIsPreviewOpen(false);
       // Redirect to transform page
       navigate('/transform');
     } catch (err) {
@@ -136,7 +150,7 @@ const TrainPage = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-gray-50 via-blue-50 to-blue-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-6 animate-slide-up">
@@ -330,27 +344,48 @@ const TrainPage = () => {
                 <div className="mt-4">
                   {characters.length > 0 ? (
                     <div className="space-y-3">
-                      {characters.map((char, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleCharacterSelect(char)}
-                          disabled={isTraining}
-                          className="w-full p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-primary-400 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="text-2xl flex-shrink-0">
-                              {CATEGORY_ICONS[char.category] || '🎭'}
-                            </span>
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-gray-900">{char.name}</h3>
-                              <p className="text-sm text-gray-600 mt-1">{char.description}</p>
-                              <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
-                                {char.source}
-                              </span>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
+                  {characters.map((char, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleCharacterSelect(char)}
+                      disabled={isTraining}
+                      className="w-full p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-primary-400 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">
+                          {CATEGORY_ICONS[char.category] || '🎭'}
+                        </span>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{char.name}</h3>
+                          <p className="text-sm text-gray-600 mt-1">{char.description}</p>
+                          <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
+                            {char.source}
+                          </span>
+                        </div>
+                        {isTraining && trainingCharacter === char.name && (
+                          <svg
+                            className="animate-spin h-5 w-5 text-primary-600 mt-1"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  ))}
                     </div>
                   ) : (
                     <div className="p-6 text-center bg-gray-50 border border-gray-200 rounded-lg">
@@ -420,12 +455,15 @@ const TrainPage = () => {
         </div>
       </div>
 
-      {/* Model Name Dialog */}
-      <ModelNameDialog
-        isOpen={showDialog}
-        onClose={() => setShowDialog(false)}
+      {/* Preview + Save Dialog */}
+      <TrainingPreview
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        examples={previewExamples}
+        defaultName={previewDefaultName}
         onSave={handleSaveModel}
-        isLoading={isSaving}
+        isSaving={isSaving}
+        title={activeTab === 'character' ? 'Character Model Preview' : 'Training Preview'}
       />
     </div>
   );

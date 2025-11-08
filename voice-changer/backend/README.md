@@ -119,6 +119,67 @@ Transform text using a trained model.
 }
 ```
 
+### POST `/api/training-examples`
+Generate 3 example transformations using a temporary (unsaved) style report.
+
+Use this after `/api/train` or `/api/train-pdf` and before saving the model.
+
+**Request:**
+```json
+{
+  "report_id": "temp_1234567890",
+  "prompts": [
+    "Say hello to a friend and ask how they are.",
+    "Politely ask for directions to the nearest train station.",
+    "Briefly describe today's weather in one sentence."
+  ]
+}
+```
+
+`prompts` is optional. If omitted, the above defaults are used.
+
+**Response:**
+```json
+{
+  "examples": [
+    "Greetings, dear friend! How do you fare today?",
+    "Pardon me, could you kindly direct me to the nearest train station?",
+    "Today is pleasantly cool with a gentle breeze."
+  ]
+}
+```
+
+### POST `/api/character-preview`
+Analyze a famous character to create a temporary style report and return 3 example transformations for review before saving.
+
+**Request:**
+```json
+{
+  "name": "SpongeBob",
+  "description": "Optimistic, energetic fry cook with a childlike sense of wonder",
+  "source": "SpongeBob SquarePants",
+  "prompts": [
+    "Say hello to a friend and ask how they are.",
+    "Politely ask for directions to the nearest train station.",
+    "Briefly describe today's weather in one sentence."
+  ]
+}
+```
+
+`prompts` is optional; defaults are used if omitted.
+
+**Response:**
+```json
+{
+  "report_id": "temp_1234567890",
+  "examples": [
+    "I'm ready! I'm ready! Hey buddy, how're ya doing today?",
+    "Excuse me! Could you point me to the choo-choo station, pretty please?",
+    "Ooh! It's a bright, bubbly day with sunshine and smiles!"
+  ]
+}
+```
+
 ### DELETE `/api/models/{model_name}`
 Delete a trained model.
 
@@ -161,6 +222,20 @@ curl -X POST http://localhost:8000/api/transform \
 ### Delete a model:
 ```bash
 curl -X DELETE http://localhost:8000/api/models/SpongeBob
+```
+
+### Training examples (after `/api/train`):
+```bash
+curl -X POST http://localhost:8000/api/training-examples \
+  -H "Content-Type: application/json" \
+  -d '{"report_id": "temp_1234567890"}'
+```
+
+### Character preview:
+```bash
+curl -X POST http://localhost:8000/api/character-preview \
+  -H "Content-Type: application/json" \
+  -d '{"name": "SpongeBob", "description": "Optimistic, energetic fry cook", "source": "SpongeBob SquarePants"}'
 ```
 
 ## Project Structure

@@ -161,4 +161,38 @@ export const trainFromCharacter = async (name, description, source) => {
   return response.data;
 };
 
+// Preview-related functions
+
+/**
+ * Get 3 example transformations using a temporary report (before saving)
+ * @param {string} reportId - Temporary report ID from /api/train or /api/train-pdf
+ * @param {string[]} [prompts] - Optional custom prompts (max 3)
+ * @returns {Promise<{examples: string[]}>}
+ */
+export const getTrainingExamples = async (reportId, prompts) => {
+  const response = await apiClient.post('/api/training-examples', {
+    report_id: reportId,
+    prompts,
+  });
+  return response.data;
+};
+
+/**
+ * Preview a character model without saving: returns report_id and 3 examples
+ * @param {string} name
+ * @param {string} description
+ * @param {string} source
+ * @param {string[]} [prompts]
+ * @returns {Promise<{report_id: string, examples: string[]}>}
+ */
+export const getCharacterPreview = async (name, description, source, prompts) => {
+  const response = await apiClient.post('/api/character-preview', {
+    name,
+    description,
+    source,
+    prompts,
+  });
+  return response.data;
+};
+
 export default apiClient;

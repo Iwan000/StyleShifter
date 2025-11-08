@@ -37,6 +37,32 @@ class StyleActor:
         transformed_text = response.output_text.strip()
         return transformed_text
 
+    def transform_with_style_report(self, style_report: str, input_text: str) -> str:
+        """
+        Transform input text using a provided style report (without requiring a saved model).
+
+        Args:
+            style_report: The style guide content as a string
+            input_text: The text to transform
+
+        Returns:
+            str: The transformed text
+        """
+        # Create the transformation prompt directly from the provided style report
+        prompt = self._create_actor_prompt(style_report, input_text)
+
+        # Call OpenAI API using Responses API
+        response = self.client.responses.create(
+            model=self.model_name,
+            instructions=(
+                "You are a text style transformer. Your job is to rewrite text to match a specific style accurately."
+            ),
+            input=prompt,
+        )
+
+        transformed_text = response.output_text.strip()
+        return transformed_text
+
     def _load_style_report(self, model_name: str) -> str:
         """Load a style report from disk"""
         file_path = os.path.join(config.MODELS_DIR, f"{model_name}.md")
