@@ -26,25 +26,15 @@ class StyleActor:
         # Create the transformation prompt
         prompt = self._create_actor_prompt(style_report, input_text)
 
-        # Call OpenAI API
-        response = self.client.chat.completions.create(
+        # Call OpenAI API using Responses API (for GPT-5)
+        response = self.client.responses.create(
             model=self.model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a text style transformer. Your job is to rewrite text to match a specific style accurately."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.8,
-            max_completion_tokens=1000
+            instructions="You are a text style transformer. Your job is to rewrite text to match a specific style accurately.",
+            input=prompt
         )
 
         # Extract and return the transformed text
-        transformed_text = response.choices[0].message.content.strip()
+        transformed_text = response.output_text.strip()
         return transformed_text
 
     def _load_style_report(self, model_name: str) -> str:

@@ -23,25 +23,15 @@ class StyleLearner:
         # Create the style analysis prompt
         prompt = self._create_learner_prompt(corpus)
 
-        # Call OpenAI API
-        response = self.client.chat.completions.create(
+        # Call OpenAI API using Responses API (for GPT-5)
+        response = self.client.responses.create(
             model=self.model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert in analyzing writing styles and character voices."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.7,
-            max_completion_tokens=2000
+            instructions="You are an expert in analyzing writing styles and character voices.",
+            input=prompt
         )
 
         # Extract the style report
-        style_report = response.choices[0].message.content
+        style_report = response.output_text
 
         # Generate a temporary report ID
         report_id = f"temp_{int(time.time())}"
