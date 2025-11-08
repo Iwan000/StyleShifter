@@ -13,19 +13,31 @@ import {
   transformPdf,
 } from '../api/client';
 
+// Category icons mapping (same as TrainPage)
+const CATEGORY_ICONS = {
+  'tv': '📺',
+  'movie': '🎬',
+  'literature': '📚',
+  'historical': '👤',
+  'game': '🎮',
+  'anime': '🎌',
+  'cartoon': '🎨',
+};
+
 const MIN_TEXT_CHARS = 50;
 
 const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
   const [activeTab, setActiveTab] = useState('new');
   const [models, setModels] = useState([]);
 
-  // New model workflow
-  const [section, setSection] = useState('home');
+  // New model workflow - changed to match TrainPage
+  const [newModelTab, setNewModelTab] = useState('text'); // 'text', 'pdf', or 'character'
   const [searchQuery, setSearchQuery] = useState('');
   const [characters, setCharacters] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [characterError, setCharacterError] = useState(null);
-  const [trainTab, setTrainTab] = useState('text');
+  const [hasSearched, setHasSearched] = useState(false);
+  const [trainingCharacter, setTrainingCharacter] = useState(null);
   const [corpus, setCorpus] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
   const [isTraining, setIsTraining] = useState(false);
@@ -66,20 +78,23 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     setCharacterError(null);
+    setHasSearched(true);
     setCharacters([]);
     try {
       const result = await searchCharacters(searchQuery.trim());
       setCharacters(result.characters || []);
     } catch {
       setCharacterError('Failed to search characters. Please try again.');
+      setCharacters([]);
     } finally {
       setIsSearching(false);
     }
   };
 
   const handleSelectCharacter = async (char) => {
-    setIsTraining(true);
     setModalError(null);
+    setIsTraining(true);
+    setTrainingCharacter(char.name);
     try {
       const preview = await getCharacterPreview(char.name, char.description, char.source);
       setReportId(preview.report_id);
@@ -90,6 +105,7 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
       setModalError('Failed to generate character preview.');
     } finally {
       setIsTraining(false);
+      setTrainingCharacter(null);
     }
   };
 
@@ -115,7 +131,13 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
       await saveModel(reportId, name);
       setPreviewOpen(false);
       await loadModels();
-      setSection('home');
+      // Reset to text tab after saving
+      setNewModelTab('text');
+      setCorpus('');
+      setPdfFile(null);
+      setSearchQuery('');
+      setCharacters([]);
+      setHasSearched(false);
     } catch {
       setModalError('Failed to save model.');
     }
@@ -154,94 +176,209 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
     }
   };
 
-  const renderNewTab = () => (
-    <div className="space-y-4">
-      {section === 'home' && (
-        <div className="card p-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button onClick={() => setSection('browse')} className="px-4 py-3 border-2 border-blue-300 rounded-lg bg-blue-50 text-blue-700 font-medium hover:bg-blue-100">
-              Browse Characters
-            </button>
-            <button onClick={() => setSection('train')} className="px-4 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">
-              Train New Model
-            </button>
-          </div>
-          {modalError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{modalError}</div>
-          )}
-        </div>
-      )}
+  const renderNewTab = () => {
+    // Calculate validation for text/pdf
+    const charCount = corpus.length;
+    const wordCount = corpus.trim().split(/\s+/).filter(Boolean).length;
+    const isValid = newModelTab === 'text'
+      ? charCount >= MIN_TEXT_CHARS
+      : newModelTab === 'pdf'
+      ? pdfFile !== null
+      : false;
 
-      {section === 'browse' && (
-        <div className="card p-4 space-y-4">
-          <div className="flex gap-2">
-            <input
-              className="input-field flex-1"
-              placeholder="Search characters..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearchCharacters()}
-            />
-            <button onClick={handleSearchCharacters} className="btn-primary">
-              {isSearching ? 'Searching...' : 'Search'}
-            </button>
-            <button onClick={() => setSection('home')} className="btn-secondary">Back</button>
-          </div>
-          {characterError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{characterError}</div>
-          )}
-          <div className="space-y-2 max-h-80 overflow-y-auto">
-            {characters.length === 0 && !isSearching ? (
-              <div className="p-3 text-sm text-gray-600 bg-gray-50 border rounded-lg">No results. Try another query.</div>
-            ) : (
-              characters.map((c, idx) => (
-                <div key={idx} className="p-3 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-300">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-gray-900">{c.name}</div>
-                      <div className="text-sm text-gray-600">{c.description}</div>
-                      <div className="mt-1 inline-block text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{c.source}</div>
-                    </div>
-                    <button onClick={() => handleSelectCharacter(c)} className="btn-primary" disabled={isTraining}>
-                      {isTraining ? 'Generating...' : 'Generate Model'}
-                    </button>
-                  </div>
+    return (
+      <div className="space-y-4">
+        {/* Tab Switcher - matching TrainPage */}
+        <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+          <button
+            onClick={() => setNewModelTab('text')}
+            className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+              newModelTab === 'text'
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Paste Text
+          </button>
+          <button
+            onClick={() => setNewModelTab('pdf')}
+            className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+              newModelTab === 'pdf'
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Upload PDF
+          </button>
+          <button
+            onClick={() => setNewModelTab('character')}
+            className={`flex-1 py-2 px-4 rounded-md font-medium text-sm transition-all ${
+              newModelTab === 'character'
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Browse Characters
+          </button>
+        </div>
+
+        {/* Text Input Section */}
+        {newModelTab === 'text' && (
+          <>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Text Corpus
+              </label>
+              <textarea
+                value={corpus}
+                onChange={(e) => setCorpus(e.target.value)}
+                placeholder="Paste dialogue from SpongeBob, Shakespeare quotes, or any text with a distinctive style..."
+                className="textarea-field h-48 text-base"
+                disabled={isTraining}
+              />
+              <div className="mt-2 flex items-center justify-between">
+                <div className="flex gap-4 text-sm">
+                  <span className={`font-medium ${charCount >= MIN_TEXT_CHARS ? 'text-green-600' : 'text-gray-500'}`}>
+                    {charCount} characters
+                  </span>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-600">{wordCount} words</span>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {section === 'train' && (
-        <div className="card p-4 space-y-4">
-          <div className="flex gap-2 p-1 bg-gray-100 rounded-lg inline-flex">
-            <button onClick={() => setTrainTab('text')} className={`px-4 py-2 rounded-md text-sm font-medium ${trainTab === 'text' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-              Text
-            </button>
-            <button onClick={() => setTrainTab('pdf')} className={`px-4 py-2 rounded-md text-sm font-medium ${trainTab === 'pdf' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-              PDF
-            </button>
-          </div>
-          {trainTab === 'text' ? (
-            <textarea className="textarea-field h-40" placeholder="Paste training text..." value={corpus} onChange={(e) => setCorpus(e.target.value)} />
-          ) : (
-            <FileUploadZone onFileSelect={setPdfFile} accept=".pdf" maxSizeMB={10} />
-          )}
-          <div className="flex gap-2">
+                {charCount > 0 && charCount < MIN_TEXT_CHARS && (
+                  <span className="text-sm text-amber-600">
+                    Need {MIN_TEXT_CHARS - charCount} more characters
+                  </span>
+                )}
+              </div>
+            </div>
             <button
               onClick={handleTrain}
-              className="btn-primary"
-              disabled={isTraining || (trainTab === 'text' ? corpus.trim().length < MIN_TEXT_CHARS : !pdfFile)}
+              disabled={!isValid || isTraining}
+              className="btn-primary w-full"
             >
-              {isTraining ? 'Training…' : 'Train'}
+              {isTraining ? 'Analyzing style patterns...' : 'Analyze Style'}
             </button>
-            <button onClick={() => setSection('home')} className="btn-secondary">Cancel</button>
+          </>
+        )}
+
+        {/* PDF Upload Section */}
+        {newModelTab === 'pdf' && (
+          <>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                PDF File
+              </label>
+              <FileUploadZone
+                onFileSelect={setPdfFile}
+                accept=".pdf"
+                maxSizeMB={10}
+                disabled={isTraining}
+              />
+            </div>
+            <button
+              onClick={handleTrain}
+              disabled={!isValid || isTraining}
+              className="btn-primary w-full"
+            >
+              {isTraining ? 'Analyzing style patterns...' : 'Analyze Style'}
+            </button>
+          </>
+        )}
+
+        {/* Character Search Section */}
+        {newModelTab === 'character' && (
+          <>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Search for a Character
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearchCharacters()}
+                  placeholder="e.g., SpongeBob, Yoda, Shakespeare..."
+                  className="input-field flex-1"
+                  disabled={isSearching || isTraining}
+                />
+                <button
+                  onClick={handleSearchCharacters}
+                  disabled={!searchQuery.trim() || isSearching || isTraining}
+                  className="btn-primary px-6"
+                >
+                  {isSearching ? (
+                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    'Search'
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Search Results */}
+            {hasSearched && !isSearching && (
+              <div className="mt-2">
+                {characters.length > 0 ? (
+                  <div className="space-y-2">
+                    {characters.map((char, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSelectCharacter(char)}
+                        disabled={isTraining}
+                        className="w-full p-3 bg-white border-2 border-gray-200 rounded-lg hover:border-primary-400 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl flex-shrink-0">
+                            {CATEGORY_ICONS[char.category] || '🎭'}
+                          </span>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900">{char.name}</h3>
+                            <p className="text-sm text-gray-600 mt-1">{char.description}</p>
+                            <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
+                              {char.source}
+                            </span>
+                          </div>
+                          {isTraining && trainingCharacter === char.name && (
+                            <svg className="animate-spin h-5 w-5 text-primary-600 mt-1" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-gray-600">
+                      Sorry, I don't have this character in my database. Please use 'Paste Text' or 'Upload PDF'.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {characterError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-800">{characterError}</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Error Message */}
+        {modalError && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-800">{modalError}</p>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   const renderTestTab = () => (
     <div className="grid md:grid-cols-2 gap-4">
@@ -351,7 +488,7 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
               defaultName={previewDefaultName}
               onSave={handleSaveModel}
               isSaving={false}
-              title={section === 'browse' ? 'Character Model Preview' : 'Training Preview'}
+              title={newModelTab === 'character' ? 'Character Model Preview' : 'Training Preview'}
             />
           </div>
         </div>
