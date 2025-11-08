@@ -137,22 +137,24 @@ const InputBar = ({
                           if (!e.currentTarget.contains(e.relatedTarget)) setHoverPinnedIdx(-1);
                         }}
                         onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation(); // Prevent container handler from firing
                           const incoming = e.dataTransfer.getData('text/model');
-                          if (!incoming || incoming === name) return;
-                          let next = pinned.filter((p) => p !== incoming);
-                          next = next.slice(0, 3);
-                          // ensure length at least idx
-                          next = next.filter(Boolean);
-                          if (next.includes(name)) {
-                            // swap positions
-                            next = next.map((n) => (n === name ? incoming : n));
-                          } else {
-                            // replace this position
-                            const base = pinned.slice();
-                            base[idx] = incoming;
-                            next = base.filter(Boolean).slice(0, 3);
+                          if (!incoming) return;
+
+                          const next = [...pinned];
+                          const oldIndex = next.indexOf(incoming);
+
+                          if (oldIndex === -1) {
+                            // Not pinned - replace at this position
+                            next[idx] = incoming;
+                          } else if (oldIndex !== idx) {
+                            // Already pinned at different position - swap
+                            [next[oldIndex], next[idx]] = [next[idx], next[oldIndex]];
                           }
-                          onManagePinned && onManagePinned(next);
+                          // If oldIndex === idx, do nothing (dropped on itself)
+
+                          onManagePinned && onManagePinned(next.slice(0, 3));
                           setHoverPinnedIdx(-1);
                         }}
                       >
