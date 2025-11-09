@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const InputBar = ({
   inputValue,
@@ -19,6 +20,7 @@ const InputBar = ({
   onOpenStyleShifter,
   onCloseSelector,
 }) => {
+  const navigate = useNavigate();
   const textareaRef = useRef(null);
   const [showManage, setShowManage] = useState(false);
   const [hoverPinnedIdx, setHoverPinnedIdx] = useState(-1);
@@ -90,25 +92,36 @@ const InputBar = ({
                   }}
                 >
                   {/* Title */}
-                  <div className="flex items-center gap-2 px-2 py-1.5">
-                    <div className="w-6 h-6 bg-gradient-to-br from-primary-600 to-primary-400 rounded-md flex items-center justify-center">
-                      <svg
-                        className="w-3.5 h-3.5 text-white"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                        />
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gradient-to-br from-primary-600 to-primary-400 rounded-md flex items-center justify-center">
+                        <svg
+                          className="w-3.5 h-3.5 text-white"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                          />
+                        </svg>
+                      </div>
+                      <div className="text-sm font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
+                        StyleShifter
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => navigate('/train')}
+                      className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 hover:text-primary-600 transition-colors"
+                      title="Open full page"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                    </div>
-                    <div className="text-sm font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
-                      StyleShifter
-                    </div>
+                    </button>
                   </div>
                   <div className="my-1 h-px bg-gray-200" />
                   <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50" onClick={onSelectOff}>
