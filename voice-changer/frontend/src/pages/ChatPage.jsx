@@ -132,7 +132,7 @@ const ChatPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="flex flex-col h-screen bg-gray-50">
       <ChatHeader />
       <MessageArea messages={messages} />
 
