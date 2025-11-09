@@ -11,6 +11,7 @@ import {
   saveModel,
   transformText,
   transformPdf,
+  extractPdf,
 } from '../api/client';
 
 // Category icons mapping (same as TrainPage)
@@ -40,6 +41,8 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
   const [trainingCharacter, setTrainingCharacter] = useState(null);
   const [corpus, setCorpus] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
+  const [extractedText, setExtractedText] = useState('');
+  const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const [modalError, setModalError] = useState(null);
   const [reportId, setReportId] = useState(null);
@@ -109,18 +112,47 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
     }
   };
 
+  const handlePdfFileSelect = async (file) => {
+    setPdfFile(file);
+    setExtractedText('');
+    setModalError(null);
+
+    if (!file) return;
+
+    setIsExtractingPdf(true);
+    try {
+      const result = await extractPdf(file);
+      setExtractedText(result.text || '');
+    } catch {
+      setModalError('Failed to extract text from PDF. Please try again.');
+      setPdfFile(null);
+    } finally {
+      setIsExtractingPdf(false);
+    }
+  };
+
   const handleTrain = async () => {
+    if (newModelTab === 'text' && corpus.trim().length < MIN_TEXT_CHARS) return;
+    if (newModelTab === 'pdf' && (isExtractingPdf || !pdfFile || extractedText.length < MIN_TEXT_CHARS)) return;
+
     setIsTraining(true);
     setModalError(null);
     try {
-      const response = trainTab === 'text' ? await trainModel(corpus) : await trainModelFromPdf(pdfFile);
+      let response;
+      if (newModelTab === 'text') {
+        response = await trainModel(corpus);
+      } else if (newModelTab === 'pdf') {
+        response = await trainModelFromPdf(pdfFile);
+      } else {
+        return;
+      }
       setReportId(response.report_id);
       const preview = await getTrainingExamples(response.report_id);
       setPreviewExamples(preview.examples || []);
       setPreviewDefaultName('');
       setPreviewOpen(true);
-    } catch {
-      setModalError('Failed to train model.');
+    } catch (err) {
+      setModalError(err?.response?.data?.detail || 'Failed to train model.');
     } finally {
       setIsTraining(false);
     }
@@ -178,13 +210,14 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
 
   const renderNewTab = () => {
     // Calculate validation for text/pdf
-    const charCount = corpus.length;
-    const wordCount = corpus.trim().split(/\s+/).filter(Boolean).length;
+    const textToAnalyze = newModelTab === 'text' ? corpus : newModelTab === 'pdf' ? extractedText : '';
+    const charCount = textToAnalyze.length;
+    const wordCount = textToAnalyze.trim().split(/\s+/).filter(Boolean).length;
     const isValid = newModelTab === 'text'
       ? charCount >= MIN_TEXT_CHARS
       : newModelTab === 'pdf'
-      ? pdfFile !== null
-      : false;
+        ? !!pdfFile && charCount >= MIN_TEXT_CHARS && !isExtractingPdf
+        : false;
 
     return (
       <div className="space-y-4">
@@ -269,11 +302,30 @@ const StyleShifterModal = ({ isOpen, onClose, onModelsUpdated }) => {
                 PDF File
               </label>
               <FileUploadZone
-                onFileSelect={setPdfFile}
+                onFileSelect={handlePdfFileSelect}
                 accept=".pdf"
                 maxSizeMB={10}
-                disabled={isTraining}
+                disabled={isTraining || isExtractingPdf}
               />
+              {isExtractingPdf && (
+                <p className="mt-2 text-sm text-gray-600">Extracting text from PDF…</p>
+              )}
+              {!isExtractingPdf && extractedText && (
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <div className="flex gap-4">
+                    <span className={`font-medium ${charCount >= MIN_TEXT_CHARS ? 'text-green-600' : 'text-gray-500'}`}>
+                      {charCount} characters
+                    </span>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-gray-600">{wordCount} words</span>
+                  </div>
+                  {charCount < MIN_TEXT_CHARS && (
+                    <span className="text-amber-600">
+                      Need {MIN_TEXT_CHARS - charCount} more characters
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <button
               onClick={handleTrain}
