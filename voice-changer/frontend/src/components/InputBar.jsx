@@ -125,7 +125,7 @@ const InputBar = ({
                   </div>
                   <div className="my-1 h-px bg-gray-200" />
                   <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50" onClick={onSelectOff}>
-                    <span className="text-base font-medium text-gray-800">Off</span>
+                    <span className="text-base font-medium text-red-600">Off</span>
                     {!selectedModel && (
                       <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
@@ -247,7 +247,14 @@ const InputBar = ({
                           key={name}
                           className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 cursor-grab"
                           draggable
-                          onDragStart={(e) => e.dataTransfer.setData('text/model', name)}
+                          onDragStart={(e) => {
+                            // Prevent drag if clicking on delete button
+                            if (e.target.closest('button[data-delete-button]')) {
+                              e.preventDefault();
+                              return;
+                            }
+                            e.dataTransfer.setData('text/model', name);
+                          }}
                         >
                           <div className="flex items-center gap-2">
                             <input
@@ -266,8 +273,18 @@ const InputBar = ({
                             <span className="text-sm text-gray-800">{name}</span>
                           </div>
                           <button
+                            data-delete-button="true"
                             className="p-1.5 rounded hover:bg-red-50 text-red-600"
-                            onClick={() => onDeleteModel && onDeleteModel(name)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              onDeleteModel && onDeleteModel(name);
+                            }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                            }}
+                            draggable={false}
                             title="Delete model"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
